@@ -1,1 +1,220 @@
+from threading import Thread
+import speech_recognition as sr
+import pywhatkit
+import wikipedia
+import datetime
+import webbrowser
+import os
+import time
+import tkinter as tk
+from PIL import Image, ImageTk
+from tkinter import scrolledtext
+from tkinter import ttk
+import pyttsx3
+import psutil
+import re
 
+engine = pyttsx3.init()
+engine.setProperty('rate', 180)        
+engine.setProperty('volume', 1.0)      
+
+voices = engine.getProperty('voices')
+for voice in voices:
+    if 'female' in voice.name.lower() or 'zira' in voice.name.lower() or 'samantha' in voice.name.lower():
+        engine.setProperty('voice', voice.id)
+        break
+
+def speak(text):
+    engine.say(text)
+    engine.runAndWait()
+
+def take_command():
+    r = sr.Recognizer()
+    with sr.Microphone() as source:
+        r.pause_threshold = 1
+        r.energy_threshold = 300
+        audio = r.listen(source)
+    try:
+        command = r.recognize_google(audio, language='en-in')
+    except Exception:
+        return "None"
+    return command.lower()
+
+EXIT_COMMANDS = ['exit', 'stop', 'bye', 'goodbye', 'bye jarvis', 'goodbye jarvis']
+
+def execute_command(command):
+    if any(cmd in command for cmd in EXIT_COMMANDS):
+        text_area.insert(tk.END, "Jarvis stopped.\n")
+        speak("Goodbye Sir!")
+        os._exit(0)
+
+    elif 'play' in command:
+        song = command.replace('play', '').strip()
+        text_area.insert(tk.END, f"Playing {song} on YouTube\n")
+        pywhatkit.playonyt(song)
+
+    elif 'time' in command:
+        time_str = datetime.datetime.now().strftime('%I:%M %p')
+        text_area.insert(tk.END, f"Time: {time_str}\n")
+
+    elif 'who is' in command or 'what is' in command:
+        person = command
+        if 'who is' in command:
+            person = command.replace('who is', '').strip()
+        elif 'what is' in command:
+            person = command.replace('what is', '').strip()
+
+        try:
+            info = wikipedia.summary(person, sentences=2)
+            text_area.insert(tk.END, f"Wikipedia: {info}\n")
+            speak(info)  
+
+        except wikipedia.exceptions.DisambiguationError as e:
+            info = wikipedia.summary(e.options[0], sentences=2)
+            text_area.insert(tk.END, f"Wikipedia (suggestion {e.options[0]}): {info}\n")
+            speak(info)
+
+        except Exception:
+            text_area.insert(tk.END, "No Wikipedia info found. Searching on Google...\n")
+            speak("I couldn't find it on Wikipedia. I am searching on Google.")
+            query = person.replace(' ', '+')
+            webbrowser.open(f"https://www.google.com/search?q={query}")
+
+    elif 'shutdown' in command:
+        os.system('shutdown /s /t 1')
+
+    elif 'restart' in command:
+        os.system('shutdown /r /t 1')
+
+    elif 'log off' in command:
+        os.system('shutdown -l')
+
+    elif 'open' in command:
+        site = command.replace('open', '').strip()
+        if site:
+            if '.' in site:
+                url = site if site.startswith('https://') else 'https://' + site
+            else:
+                url = f'https://www.{site}.com'
+            text_area.insert(tk.END, f"Opening {site}\n")
+            webbrowser.open(url)
+
+    else:
+        math_pattern = r'^[0-9+\-*/(). ]+$'
+        if re.match(math_pattern, command.replace(' ', '')):
+            try:
+                result = eval(command)
+                text_area.insert(tk.END, f"Result: {result}\n")
+                speak(f"The result is {result}")
+            except Exception:
+                text_area.insert(tk.END, "Error in calculation.\n")
+                speak("Sorry, I cannot calculate that.")
+        else:
+            text_area.insert(tk.END, f"Command: {command}\n")
+
+def run_jarvis():
+    text_area.insert(tk.END, "Jarvis: I am your personal assistant.\n")
+    speak("I am your personal assistant.")
+
+    while True:
+        command = take_command()
+
+        if command == "None":
+            continue
+
+        text_area.insert(tk.END, f"You said: {command}\n")
+
+        Thread(target=execute_command, args=(command,)).start()
+
+        time.sleep(0.5)
+
+
+window = tk.Tk()
+window.title("Neo Jarvis Assistant")
+window.geometry("1024x768")
+window.configure(bg='#1B1B2F')
+
+canvas = tk.Canvas(window, width=1024, height=768, bg='#1B1B2F', highlightthickness=0)
+canvas.pack(fill="both", expand=True)
+
+try:
+    bg_image = Image.open('D:/Smartlock/Persional-Ai/jarvis/demo.py/ironman_background.jpg')
+    bg_image = bg_image.resize((1024, 768), Image.Resampling.LANCZOS)
+    bg_photo = ImageTk.PhotoImage(bg_image)
+    bg_label = tk.Label(window, image=bg_photo)
+    bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+except:
+    pass  
+
+title_label = tk.Label(window, text="NEO AI", font=("Orbitron", 20, "bold"), fg="#00FFEA", bg='#1B1B2F')
+title_label.place(x=20, y=20)
+
+def blink_title():
+    current_color = title_label.cget("fg")
+    next_color = "#1B1B2F" if current_color == "#00FFEA" else "#00FFEA"
+    title_label.config(fg=next_color)
+    window.after(500, blink_title)
+
+blink_title()
+
+text_area = scrolledtext.ScrolledText(window, width=30, height=5, font=("Consolas", 10),
+                                      bg='#1B1B2F', fg='#00FFEA', insertbackground='white')
+text_area.place(x=700, y=20)
+
+hud_canvas = tk.Canvas(window, width=200, height=200, bg='#1B1B2F', highlightthickness=0)
+hud_canvas.place(x=50, y=100)
+
+def update_hud():
+    hud_canvas.delete("all")
+    cpu_percent = psutil.cpu_percent()
+    hud_canvas.create_oval(20, 20, 180, 180, outline="#00FFEA", width=3)
+    hud_canvas.create_arc(20, 20, 180, 180, start=90, extent=-cpu_percent*3.6, style='arc', outline="#FF073A", width=5)
+    hud_canvas.create_text(100, 100, text=f"CPU\n{cpu_percent}%", fill="#00FFEA", font=("Orbitron", 12, "bold"))
+
+    if hasattr(psutil, "sensors_battery"):
+        battery = psutil.sensors_battery()
+        if battery:
+            hud_canvas.create_text(100, 140, text=f"Battery\n{int(battery.percent)}%", fill="#00FFEA", font=("Orbitron", 10, "bold"))
+
+    window.after(1000, update_hud)
+
+update_hud()
+
+# --- Floating AI Responses ---
+def float_text(message):
+    float_label = tk.Label(window, text=message, font=("Orbitron", 12, "bold"), fg="#00FFEA", bg="#1B1B2F")
+    float_label.place(x=1024, y=600)
+    def move():
+        x, y = float_label.winfo_x(), float_label.winfo_y()
+        if x > 700:
+            float_label.place(x=x-5, y=y)
+            window.after(30, move)
+        else:
+            float_label.destroy()
+    move()
+
+def animate_text(message, index):
+    if index <= len(message):
+        text_area.delete('1.0', tk.END)
+        text_area.insert(tk.END, message[:index])
+        text_area.see(tk.END)
+        window.after(20, lambda: animate_text(message, index + 1))
+    if index == len(message):
+        float_text(message)
+
+# --- Jarvis Loop ---
+def run_jarvis():
+    speak("I am your personal assistant.")
+    get_command_loop()
+
+def get_command_loop():
+    command = take_command()
+    if command == "None":
+        window.after(500, get_command_loop)
+    else:
+        animate_text(f"[You]: {command}\n", 0)
+        execute_command(command)
+        window.after(500, get_command_loop)
+
+window.after(1000, run_jarvis)
+window.mainloop()
